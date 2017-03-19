@@ -30,6 +30,11 @@
             <artifactId>ktor-jetty</artifactId>
             <version>${project.version}</version>
         </dependency>
+        <dependency>
+            <groupId>org.jetbrains.ktor</groupId>
+            <artifactId>ktor-undertow</artifactId>
+            <version>${project.version}</version>
+        </dependency>
 
         <dependency>
             <groupId>org.openjdk.jmh</groupId>
