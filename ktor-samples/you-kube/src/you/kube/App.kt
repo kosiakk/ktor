@@ -1,5 +1,6 @@
 package you.kube
 
+import com.jdiazcano.cfg4k.providers.*
 import org.jetbrains.ktor.application.*
 import org.jetbrains.ktor.auth.*
 import org.jetbrains.ktor.features.*
@@ -29,6 +30,11 @@ class Index()
 
 data class YouKubeSession(val userId: String)
 
+interface YouKubeConfiguration {
+    val sessionKey: String
+    val uploadDir: String
+}
+
 fun Application.youKubeApplication() {
     install(DefaultHeaders)
     install(CallLogging)
@@ -39,12 +45,11 @@ fun Application.youKubeApplication() {
         default()
         excludeContentType(ContentType.Video.Any)
     }
-    val youkubeConfig = environment.config.config("youkube")
-    val sessionCookieConfig = youkubeConfig.config("session.cookie")
-    val key: String = sessionCookieConfig.property("key").getString()
+    val youkubeConfig = environment.configProvider.bind<YouKubeConfiguration>("youkube")
+    val key: String = youkubeConfig.sessionKey
     val sessionkey = hex(key)
 
-    val uploadDirPath: String = youkubeConfig.property("upload.dir").getString()
+    val uploadDirPath: String = youkubeConfig.uploadDir
     val uploadDir = File(uploadDirPath)
     if (!uploadDir.mkdirs() && !uploadDir.exists()) {
         throw IOException("Failed to create directory ${uploadDir.absolutePath}")

@@ -1,6 +1,6 @@
 package org.jetbrains.ktor.application
 
-import org.jetbrains.ktor.config.*
+import com.jdiazcano.cfg4k.providers.*
 import org.jetbrains.ktor.logging.*
 
 /**
@@ -19,9 +19,9 @@ interface ApplicationEnvironment {
     val log: ApplicationLog
 
     /**
-     * Configuration for [Application]
+     * Binding config provider
      */
-    val config: ApplicationConfig
+    val configProvider: ConfigProvider
 
     /**
      * Provides events on Application lifecycle

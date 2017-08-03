@@ -1,10 +1,12 @@
 package org.jetbrains.ktor.servlet
 
+import com.jdiazcano.cfg4k.hocon.*
+import com.jdiazcano.cfg4k.providers.*
 import com.typesafe.config.*
 import org.jetbrains.ktor.application.*
-import org.jetbrains.ktor.config.*
 import org.jetbrains.ktor.host.*
 import org.jetbrains.ktor.logging.*
+import org.jetbrains.ktor.util.*
 import javax.servlet.annotation.*
 
 @MultipartConfig
@@ -31,7 +33,7 @@ open class ServletApplicationHost : KtorServlet() {
         val applicationId = combinedConfig.tryGetString(applicationIdPath) ?: "Application"
 
         applicationHostEnvironment {
-            config = HoconApplicationConfig(combinedConfig)
+            configProvider = Providers.proxy(HoconConfigLoader(combinedConfig))
             log = SLF4JApplicationLog(applicationId)
             classLoader = servletContext.classLoader
         }.apply {

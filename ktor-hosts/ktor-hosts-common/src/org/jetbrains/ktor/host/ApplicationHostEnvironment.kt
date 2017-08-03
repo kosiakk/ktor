@@ -1,7 +1,9 @@
 package org.jetbrains.ktor.host
 
+import com.jdiazcano.cfg4k.core.*
+import com.jdiazcano.cfg4k.loaders.*
+import com.jdiazcano.cfg4k.providers.*
 import org.jetbrains.ktor.application.*
-import org.jetbrains.ktor.config.*
 import org.jetbrains.ktor.logging.*
 
 /**
@@ -39,10 +41,13 @@ fun applicationHostEnvironment(builder: ApplicationHostEnvironmentBuilder.() -> 
 }
 
 class ApplicationHostEnvironmentBuilder {
-    var watchPaths = emptyList<String>()
     var classLoader: ClassLoader = ApplicationHostEnvironment::class.java.classLoader
     var log: ApplicationLog = NullApplicationLog()
-    var config: ApplicationConfig = MapApplicationConfig()
+
+    var configProvider: ConfigProvider = Providers.proxy(object : ConfigLoader {
+        override fun get(key: String): ConfigObject? = null
+        override fun reload() {}
+    })
 
     val connectors = mutableListOf<HostConnectorConfig>()
     val modules = mutableListOf<Application.() -> Unit>()
@@ -53,6 +58,7 @@ class ApplicationHostEnvironmentBuilder {
 
     fun build(builder: ApplicationHostEnvironmentBuilder.() -> Unit): ApplicationHostEnvironment {
         builder(this)
-        return ApplicationHostEnvironmentReloading(classLoader, log, config, connectors, modules, watchPaths)
+        val applicationConfig = configProvider.bind<ApplicationConfiguration>("ktor.application")
+        return ApplicationHostEnvironmentReloading(classLoader, log, configProvider, connectors, modules, applicationConfig)
     }
 }

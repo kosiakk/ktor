@@ -1,5 +1,6 @@
 package org.jetbrains.ktor.host
 
+import com.jdiazcano.cfg4k.providers.*
 import org.jetbrains.ktor.application.*
 import org.jetbrains.ktor.content.*
 import org.jetbrains.ktor.http.*
@@ -10,10 +11,14 @@ import org.jetbrains.ktor.response.*
 import java.nio.channels.*
 import java.util.concurrent.*
 
+interface ShutdownConfiguration {
+    val url: String?
+}
+
 fun defaultHostPipeline(environment: ApplicationEnvironment): HostPipeline {
     val pipeline = HostPipeline()
-
-    environment.config.propertyOrNull("ktor.deployment.shutdown.url")?.getString()?.let { url ->
+    val shutdownConfig = environment.configProvider.bind<ShutdownConfiguration>("ktor.deployment.shutdown")
+    shutdownConfig.url?.let { url ->
         pipeline.install(ShutDownUrl.HostFeature) {
             shutDownUrl = url
         }

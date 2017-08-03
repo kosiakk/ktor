@@ -1,14 +1,12 @@
 package org.jetbrains.ktor.testing
 
 import org.jetbrains.ktor.application.*
-import org.jetbrains.ktor.config.*
 import org.jetbrains.ktor.host.*
 import org.jetbrains.ktor.http.*
 import org.jetbrains.ktor.logging.*
 import java.util.concurrent.*
 
 fun createTestEnvironment(configure: ApplicationHostEnvironmentBuilder.() -> Unit = {}) = applicationHostEnvironment {
-    config = MapApplicationConfig("ktor.deployment.environment" to "test")
     log = SLF4JApplicationLog("ktor.test")
     configure()
 }
