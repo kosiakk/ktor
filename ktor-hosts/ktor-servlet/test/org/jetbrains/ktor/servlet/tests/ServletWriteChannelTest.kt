@@ -6,6 +6,7 @@ import org.junit.*
 import org.junit.rules.*
 import java.io.*
 import java.nio.*
+import java.nio.channels.*
 import java.util.concurrent.*
 import java.util.concurrent.atomic.*
 import javax.servlet.*
@@ -20,7 +21,7 @@ class ServletWriteChannelTest {
     val errors = ErrorCollector()
 
     @get:Rule
-    val to = Timeout(5L, TimeUnit.SECONDS)
+    val to = Timeout(500000L, TimeUnit.SECONDS)
 
     private val exec = Executors.newSingleThreadExecutor()
     private val ctx = exec.asCoroutineDispatcher()
@@ -29,6 +30,7 @@ class ServletWriteChannelTest {
 
     @After
     fun tearDown() {
+        ch.close()
         exec.shutdown()
     }
 
@@ -56,7 +58,7 @@ class ServletWriteChannelTest {
     }
 
     @Test
-    fun testWriteBeforeReady() {
+    fun testWriteBeforeReady1() {
         launch {
             assertCheckpoint(1)
 
@@ -65,9 +67,194 @@ class ServletWriteChannelTest {
             assertCheckpoint(3)
         }
 
-        runBlocking {
+        launch {
+            assertCheckpoint(2)
+            os.ready(2)
+        }
+
+        finish(3)
+    }
+
+    @Test
+    fun testWriteBeforeReady2() {
+        launch {
+            assertCheckpoint(1)
+
+            ch.write(ByteBuffer.allocate(1))
+
+            assertCheckpoint(4)
+        }
+
+        launch {
             assertCheckpoint(2)
             os.ready(1)
+        }
+
+        launch {
+            assertCheckpoint(3)
+            os.ready(1)
+        }
+
+        finish(4)
+    }
+
+    @Test
+    fun testWriteAfterReady1() {
+        os.ready(2)
+
+        launch {
+            assertCheckpoint(1)
+
+            ch.write(ByteBuffer.allocate(1))
+
+            assertCheckpoint(2)
+        }
+
+        finish(2)
+    }
+
+    @Test
+    fun testWriteAfterReady2() {
+        os.ready(1)
+
+        launch {
+            assertCheckpoint(1)
+
+            ch.write(ByteBuffer.allocate(1))
+
+            assertCheckpoint(3)
+        }
+
+        launch {
+            assertCheckpoint(2)
+            os.ready(1)
+        }
+
+        finish(3)
+    }
+
+
+    @Test
+    fun testWriteSequence1() {
+        os.ready(2)
+
+        launch {
+            assertCheckpoint(1)
+
+            ch.write(ByteBuffer.allocate(1))
+
+            assertCheckpoint(2)
+
+            ch.write(ByteBuffer.allocate(1))
+
+            assertCheckpoint(4)
+        }
+
+        launch {
+            assertCheckpoint(3)
+            os.ready(1)
+        }
+
+        finish(4)
+    }
+
+    @Test
+    fun testWriteSequence2() {
+        os.ready(2)
+
+        launch {
+            assertCheckpoint(1)
+
+            ch.write(ByteBuffer.allocate(1))
+
+            assertCheckpoint(2)
+
+            ch.write(ByteBuffer.allocate(1))
+
+            assertCheckpoint(4)
+        }
+
+        launch {
+            assertCheckpoint(3)
+            os.ready(1)
+        }
+
+        finish(4)
+    }
+
+    @Test
+    fun testWriteSequence3() {
+        launch {
+            assertCheckpoint(1)
+
+            ch.write(ByteBuffer.allocate(1))
+
+            assertCheckpoint(3)
+
+            ch.write(ByteBuffer.allocate(1))
+
+            assertCheckpoint(5)
+        }
+
+        launch {
+            assertCheckpoint(2)
+            os.ready(2)
+
+            launch {
+                assertCheckpoint(4)
+                os.ready(1)
+            }
+        }
+
+        finish(5)
+    }
+
+    @Test
+    fun testWriteSequence4() {
+        launch {
+            assertCheckpoint(1)
+
+            ch.write(ByteBuffer.allocate(1))
+
+            assertCheckpoint(3)
+
+            ch.write(ByteBuffer.allocate(1))
+
+            assertCheckpoint(5)
+        }
+
+        launch {
+            assertCheckpoint(2)
+            os.ready(2)
+
+            launch {
+                assertCheckpoint(4)
+                os.ready(1)
+            }
+        }
+
+        finish(5)
+    }
+
+    @Test
+    fun testCloseAfterWrite() {
+        os.ready(1)
+
+        launch {
+            assertCheckpoint(1)
+
+            try {
+                ch.write(ByteBuffer.allocate(1))
+                fail("Shouldn't reach here")
+            } catch (expected: ClosedChannelException) {
+            }
+
+            assertCheckpoint(3)
+        }
+
+        launch {
+            assertCheckpoint(2)
+            ch.close()
         }
 
         finish(3)
@@ -76,18 +263,22 @@ class ServletWriteChannelTest {
     private fun finish(n: Int) {
         val l = CountDownLatch(1)
 
-        finish(n, l)
+        finish(n, l, 100)
 
-        if (!l.await(5L, TimeUnit.SECONDS)) {
+        if (!l.await(500000L, TimeUnit.SECONDS)) {
             fail()
         }
     }
 
-    private fun finish(n: Int, l: CountDownLatch) {
+    private fun finish(n: Int, l: CountDownLatch, attempts: Int) {
         launch {
             if (current.get() == n)
                 l.countDown()
-            else finish(n)
+            else if (attempts == 0) {
+                errors.addError(TimeoutException())
+                l.countDown()
+            }
+            else finish(n, l, attempts - 1)
         }
     }
 
@@ -133,15 +324,19 @@ class ServletWriteChannelTest {
             }
         }
 
+        private fun setNotifyWhenReady() {
+            notifyWhenReady.set(true)
+            if (ready.get() > 0) { // volatile read
+                tryNotify()
+            }
+        }
+
         override fun isReady(): Boolean {
             isReadyCalled.set(true)
             val rc = ready.get()
 
             if (rc == 0) {
-                notifyWhenReady.set(true)
-                if (ready.get() > 0) { // volatile read
-                    tryNotify()
-                }
+                setNotifyWhenReady()
             }
 
             return rc > 0
@@ -163,6 +358,7 @@ class ServletWriteChannelTest {
             if (!listener.compareAndSet(null, writeListener)) {
                 throw IllegalStateException()
             }
+            setNotifyWhenReady()
         }
     }
 }
